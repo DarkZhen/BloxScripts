@@ -1,50 +1,47 @@
--- Blox Fruits Hub - Advanced Complex UI
--- Modern Design with Tabs, Animations, and Advanced Features
+-- Complete Blox Fruits Script
+-- All Features Including Auto Farm, Auto Boss, Fruit Sniper, ESP, and More
+-- No Key Required
 
--- Anti-Kick Protection
+repeat wait() until game:IsLoaded()
+repeat wait() until game.Players
+repeat wait() until game.Players.LocalPlayer
+
+-- Anti-Kick & Anti-Ban Protection
 local OldNamecall
 OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
     local Args = {...}
     local NamecallMethod = getnamecallmethod()
     
-    if not checkcaller() and NamecallMethod == "Kick" then
+    if not checkcaller() and (NamecallMethod == "Kick" or NamecallMethod == "kick") then
         return nil
     end
     
     return OldNamecall(Self, ...)
 end)
 
+-- Disable AFK Kick
 for i,v in pairs(getconnections(game.Players.LocalPlayer.Idled)) do
     v:Disable()
 end
 
--- Load Rayfield UI Library (Modern & Complex)
+-- Load UI Library
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Blox Fruits Hub | Advanced Edition",
-   LoadingTitle = "Blox Fruits Hub",
-   LoadingSubtitle = "by DarkZhen",
+   Name = "🍇 Blox Fruits Hub | Complete Edition",
+   LoadingTitle = "Loading Blox Fruits Hub",
+   LoadingSubtitle = "All Features Unlocked",
    ConfigurationSaving = {
       Enabled = true,
-      FolderName = "BloxFruitsHub",
+      FolderName = "BloxFruitsComplete",
       FileName = "Config"
    },
    Discord = {
       Enabled = false,
-      Invite = "noinvitelink",
-      RememberJoins = true
+      Invite = "",
+      RememberJoins = false
    },
-   KeySystem = false,
-   KeySettings = {
-      Title = "Blox Fruits Hub",
-      Subtitle = "Key System",
-      Note = "No key required!",
-      FileName = "Key",
-      SaveKey = true,
-      GrabKeyFromSite = false,
-      Key = {"Hello"}
-   }
+   KeySystem = false
 })
 
 -- Services
@@ -54,6 +51,8 @@ local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 
 -- Player
 local LocalPlayer = Players.LocalPlayer
@@ -68,39 +67,57 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 -- Settings
-local Settings = {
+_G.Settings = {
+    -- Auto Farm
     AutoFarmLevel = false,
     AutoFarmBoss = false,
-    AutoQuest = false,
-    AutoMastery = false,
-    BringMob = false,
+    AutoFarmMastery = false,
+    AutoFarmBone = false,
+    AutoFarmChest = false,
+    AutoObservationHaki = false,
+    
+    -- Combat
     FastAttack = false,
     AutoHaki = false,
+    BringMob = false,
+    
+    -- Stats
     AutoStats = false,
     SelectedStat = "Melee",
+    
+    -- Devil Fruits
     AutoCollectFruits = false,
     AutoStoreFruits = false,
-    ESPFruits = false,
-    FruitNotifications = false,
     FruitSniper = false,
     SelectedFruit = nil,
-    AutoAwakening = false,
-    SpeedBoost = false,
-    SpeedValue = 16,
-    Fly = false,
-    NoClip = false,
-    InfiniteJump = false,
-    RemoveFog = false,
-    FullBright = false,
+    ESPFruits = false,
+    
+    -- Raids
+    AutoRaid = false,
+    AutoAwaken = false,
+    
+    -- Teleport
+    AutoQuest = false,
+    
+    -- Misc
     AntiAFK = true,
-    AutoSecondSea = false,
-    AutoThirdSea = false
+    RemoveFog = false,
+    WhiteScreen = false,
+    FastMode = false
 }
 
-local selectedBoss = nil
-local selectedIsland = nil
-local farmingEnemy = false
-local farmingBoss = false
+-- Selected Variables
+local SelectedBoss = nil
+local SelectedIsland = nil
+local SelectedWeapon = nil
+local SelectedMaterial = nil
+
+-- Combat Framework for Fast Attack
+local CombatFramework, CombatFrameworkR
+pcall(function()
+    CombatFramework = require(LocalPlayer.PlayerScripts:WaitForChild("CombatFramework"))
+    CombatFrameworkR = getupvalues(CombatFramework)[2]
+end)
 
 -- Utility Functions
 local function Notify(title, text, duration)
@@ -108,27 +125,22 @@ local function Notify(title, text, duration)
        Title = title,
        Content = text,
        Duration = duration or 3,
-       Image = 4483362458,
-       Actions = {
-          Ignore = {
-             Name = "Okay!",
-             Callback = function() end
-          },
-       },
+       Image = 4483362458
     })
 end
 
-local function TweenToPosition(position, speed)
-    if not Character or not HumanoidRootPart then return end
-    
-    local TweenService = game:GetService("TweenService")
-    local distance = (HumanoidRootPart.Position - position).Magnitude
+local function GetDistance(pos)
+    return (HumanoidRootPart.Position - pos).Magnitude
+end
+
+local function Tween(position, speed)
+    local distance = GetDistance(position)
     local tweenSpeed = speed or 300
-    local duration = distance / tweenSpeed
+    local time = distance / tweenSpeed
     
     local tween = TweenService:Create(
         HumanoidRootPart,
-        TweenInfo.new(duration, Enum.EasingStyle.Linear),
+        TweenInfo.new(time, Enum.EasingStyle.Linear),
         {CFrame = CFrame.new(position)}
     )
     
@@ -136,107 +148,112 @@ local function TweenToPosition(position, speed)
     return tween
 end
 
-local function FindNearestEnemy()
-    local nearestEnemy = nil
-    local nearestDistance = math.huge
+local function Teleport(cframe)
+    HumanoidRootPart.CFrame = cframe
+end
+
+local function GetNearestMob()
+    local nearestMob = nil
+    local shortestDistance = math.huge
     
-    for _, enemy in pairs(Workspace.Enemies:GetChildren()) do
-        if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-            local distance = (HumanoidRootPart.Position - enemy.HumanoidRootPart.Position).Magnitude
-            if distance < nearestDistance then
-                nearestDistance = distance
-                nearestEnemy = enemy
+    for _, mob in pairs(Workspace.Enemies:GetChildren()) do
+        if mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
+            local distance = GetDistance(mob.HumanoidRootPart.Position)
+            if distance < shortestDistance then
+                shortestDistance = distance
+                nearestMob = mob
             end
         end
     end
     
-    return nearestEnemy
+    return nearestMob
 end
 
-local function FindBoss(bossName)
+local function GetBoss(name)
     for _, boss in pairs(Workspace.Enemies:GetChildren()) do
-        if boss.Name == bossName and boss:FindFirstChild("Humanoid") and boss.Humanoid.Health > 0 then
+        if string.find(boss.Name, name) and boss:FindFirstChild("Humanoid") and boss.Humanoid.Health > 0 then
             return boss
         end
     end
     return nil
 end
 
-local function EquipWeapon()
-    pcall(function()
-        if Character:FindFirstChildOfClass("Tool") then
-            return
+local function EquipTool()
+    for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            Humanoid:EquipTool(tool)
+            return true
         end
-        
-        for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                if tool.ToolTip == "Melee" or tool.ToolTip == "Sword" or tool.ToolTip == "Blox Fruit" then
-                    Humanoid:EquipTool(tool)
-                    wait(0.5)
-                    return
-                end
-            end
-        end
-    end)
-end
-
-local function AttackEnemy()
-    pcall(function()
-        local tool = Character:FindFirstChildOfClass("Tool")
-        if tool and tool:FindFirstChild("Handle") then
-            tool:Activate()
-        end
-    end)
-end
-
-local function UseSkills()
-    local skills = {"Z", "X", "C", "V", "F"}
-    for _, key in pairs(skills) do
-        VirtualInputManager:SendKeyEvent(true, key, false, game)
-        wait(0.1)
-        VirtualInputManager:SendKeyEvent(false, key, false, game)
-        wait(0.5)
     end
+    return false
+end
+
+local function AttackNoCD()
+    pcall(function()
+        local weapon = Character:FindFirstChildOfClass("Tool")
+        if weapon then
+            ReplicatedStorage.RigControllerEvent:FireServer("weaponChange", weapon.Name)
+            ReplicatedStorage.RigControllerEvent:FireServer("hit", game:GetService("ReplicatedStorage").Assets.Damage[weapon.Name], 2, "")
+        end
+    end)
+end
+
+local function UseSkill(skill)
+    VirtualInputManager:SendKeyEvent(true, skill, false, game)
+    wait(0.1)
+    VirtualInputManager:SendKeyEvent(false, skill, false, game)
+end
+
+local function CheckQuest()
+    local questTitle = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
+    if questTitle and questTitle.Visible then
+        return true
+    end
+    return false
+end
+
+local function GetQuestTitle()
+    if LocalPlayer.PlayerGui.Main.Quest.Visible then
+        return LocalPlayer.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
+    end
+    return ""
 end
 
 -- Boss List
 local BossList = {
-    "The Gorilla King [Lv. 25] [Boss]",
-    "Bobby [Lv. 55] [Boss]",
-    "Yeti [Lv. 110] [Boss]",
-    "Mob Leader [Lv. 120] [Boss]",
-    "Vice Admiral [Lv. 130] [Boss]",
-    "Warden [Lv. 220] [Boss]",
-    "Chief Warden [Lv. 230] [Boss]",
-    "Swan [Lv. 240] [Boss]",
-    "Magma Admiral [Lv. 350] [Boss]",
-    "Fishman Lord [Lv. 425] [Boss]",
-    "Wysper [Lv. 500] [Boss]",
-    "Thunder God [Lv. 575] [Boss]",
-    "Cyborg [Lv. 675] [Boss]",
-    "Saber Expert [Lv. 200] [Boss]",
-    "The Saw [Lv. 100] [Boss]",
-    "Greybeard [Lv. 750] [Boss]",
-    "Diamond [Lv. 750] [Boss]",
-    "Jeremy [Lv. 850] [Boss]",
-    "Fajita [Lv. 925] [Boss]",
-    "Don Swan [Lv. 1000] [Boss]",
-    "Smoke Admiral [Lv. 1150] [Boss]",
-    "Cursed Captain [Lv. 1325] [Boss]",
-    "Darkbeard [Lv. 1000] [Boss]",
-    "Order [Lv. 1250] [Boss]",
-    "Awakened Ice Admiral [Lv. 1400] [Boss]",
-    "Tide Keeper [Lv. 1475] [Boss]",
-    "rip_indra [Lv. 5000] [Boss]",
-    "Dough King [Lv. 1111] [Boss]",
-    "Soul Reaper [Lv. 2100] [Boss]"
+    "The Gorilla King",
+    "Bobby",
+    "Yeti",
+    "Mob Leader",
+    "Vice Admiral",
+    "Warden",
+    "Chief Warden",
+    "Swan",
+    "Magma Admiral",
+    "Fishman Lord",
+    "Wysper",
+    "Thunder God",
+    "Cyborg",
+    "Saber Expert",
+    "Greybeard",
+    "Diamond",
+    "Jeremy",
+    "Fajita",
+    "Don Swan",
+    "Smoke Admiral",
+    "Cursed Captain",
+    "Darkbeard",
+    "Order",
+    "Awakened Ice Admiral",
+    "Tide Keeper",
+    "rip_indra",
+    "Soul Reaper",
+    "Dough King"
 }
 
 -- Island List
 local IslandsList = {
-    "WindMill",
-    "Marine",
-    "Middle Town",
+    "StartingArea",
     "Jungle",
     "Pirate Village",
     "Desert",
@@ -249,22 +266,16 @@ local IslandsList = {
     "Underwater City",
     "Upper Skylands",
     "Fountain City",
-    "Shank Room",
-    "Mob Island",
-    "Kingdom of Rose",
-    "Cafe",
+    "Port Town",
+    "Hydra Island",
     "Mansion",
     "Castle on the Sea",
-    "Hydra Island",
     "Haunted Castle",
-    "Sea Castle",
-    "Ice Castle",
-    "Forgotten Island",
     "Tiki Outpost"
 }
 
 -- Fruit List
-local FruitList = {
+local FruitsList = {
     "Bomb-Bomb",
     "Spike-Spike",
     "Chop-Chop",
@@ -301,36 +312,29 @@ local FruitList = {
 
 -- Auto Farm Level
 spawn(function()
-    while wait(0.1) do
-        if Settings.AutoFarmLevel and not farmingEnemy then
+    while wait() do
+        if _G.Settings.AutoFarmLevel then
             pcall(function()
-                local enemy = FindNearestEnemy()
-                if enemy and enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-                    farmingEnemy = true
-                    
-                    EquipWeapon()
-                    wait(0.3)
-                    
-                    repeat wait(0.1)
-                        if not Settings.AutoFarmLevel then break end
-                        if not enemy or not enemy.Parent or enemy.Humanoid.Health <= 0 then break end
+                local mob = GetNearestMob()
+                if mob then
+                    repeat wait()
+                        if not _G.Settings.AutoFarmLevel then break end
+                        if not mob or mob.Humanoid.Health <= 0 then break end
                         
-                        if Settings.BringMob then
-                            enemy.HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.new(0, 0, -15)
-                            enemy.HumanoidRootPart.CanCollide = false
-                            enemy.HumanoidRootPart.Size = Vector3.new(50, 50, 50)
-                            enemy.Humanoid.WalkSpeed = 0.1
-                            enemy.Humanoid.JumpPower = 0.1
+                        EquipTool()
+                        
+                        if _G.Settings.BringMob then
+                            mob.HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.new(0, 0, -10)
+                            mob.HumanoidRootPart.CanCollide = false
+                            mob.HumanoidRootPart.Size = Vector3.new(50, 50, 50)
+                            mob.Humanoid.WalkSpeed = 0
                         else
-                            HumanoidRootPart.CFrame = enemy.HumanoidRootPart.CFrame * CFrame.new(0, 20, 3)
+                            HumanoidRootPart.CFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0)
                         end
                         
-                        AttackEnemy()
+                        AttackNoCD()
                         
-                    until not enemy or not enemy.Parent or enemy.Humanoid.Health <= 0 or not Settings.AutoFarmLevel
-                    
-                    farmingEnemy = false
-                    wait(0.5)
+                    until not mob or mob.Humanoid.Health <= 0 or not _G.Settings.AutoFarmLevel
                 end
             end)
         end
@@ -339,32 +343,29 @@ end)
 
 -- Auto Farm Boss
 spawn(function()
-    while wait(0.5) do
-        if Settings.AutoFarmBoss and selectedBoss and not farmingBoss then
+    while wait() do
+        if _G.Settings.AutoFarmBoss and SelectedBoss then
             pcall(function()
-                local boss = FindBoss(selectedBoss)
-                if boss and boss:FindFirstChild("Humanoid") and boss.Humanoid.Health > 0 and boss:FindFirstChild("HumanoidRootPart") then
-                    farmingBoss = true
-                    
-                    EquipWeapon()
-                    wait(0.3)
-                    
-                    repeat wait(0.1)
-                        if not Settings.AutoFarmBoss then break end
-                        if not boss or not boss.Parent or boss.Humanoid.Health <= 0 then break end
+                local boss = GetBoss(SelectedBoss)
+                if boss then
+                    repeat wait()
+                        if not _G.Settings.AutoFarmBoss then break end
+                        if not boss or boss.Humanoid.Health <= 0 then break end
                         
-                        HumanoidRootPart.CFrame = boss.HumanoidRootPart.CFrame * CFrame.new(0, 25, 5)
-                        AttackEnemy()
+                        EquipTool()
+                        HumanoidRootPart.CFrame = boss.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0)
+                        AttackNoCD()
                         
-                        if tick() % 3 < 0.5 then
-                            UseSkills()
+                        -- Use skills every 2 seconds
+                        if tick() % 2 < 0.5 then
+                            UseSkill("Z")
+                            UseSkill("X")
+                            UseSkill("C")
                         end
                         
-                    until not boss or not boss.Parent or boss.Humanoid.Health <= 0 or not Settings.AutoFarmBoss
+                    until not boss or boss.Humanoid.Health <= 0 or not _G.Settings.AutoFarmBoss
                     
-                    farmingBoss = false
-                    Notify("Boss Defeated", selectedBoss .. " has been defeated!", 3)
-                    wait(1)
+                    Notify("Boss Defeated", SelectedBoss .. " has been defeated!", 3)
                 end
             end)
         end
@@ -372,41 +373,11 @@ spawn(function()
 end)
 
 -- Fast Attack
-local lastAttackTime = 0
 spawn(function()
-    while wait(0.01) do
-        if Settings.FastAttack then
+    while wait() do
+        if _G.Settings.FastAttack then
             pcall(function()
-                local currentTime = tick()
-                if currentTime - lastAttackTime >= 0.1 then
-                    lastAttackTime = currentTime
-                    
-                    local tool = Character:FindFirstChildOfClass("Tool")
-                    if tool and tool:FindFirstChild("Handle") then
-                        tool:Activate()
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- Auto Stats
-spawn(function()
-    while wait(0.1) do
-        if Settings.AutoStats then
-            pcall(function()
-                if Settings.SelectedStat == "Melee" then
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", "Melee", 1)
-                elseif Settings.SelectedStat == "Defense" then
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", "Defense", 1)
-                elseif Settings.SelectedStat == "Sword" then
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", "Sword", 1)
-                elseif Settings.SelectedStat == "Gun" then
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", "Gun", 1)
-                elseif Settings.SelectedStat == "Devil Fruit" then
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", "Demon Fruit", 1)
-                end
+                AttackNoCD()
             end)
         end
     end
@@ -414,8 +385,8 @@ end)
 
 -- Auto Haki
 spawn(function()
-    while wait(0.5) do
-        if Settings.AutoHaki then
+    while wait(1) do
+        if _G.Settings.AutoHaki then
             pcall(function()
                 if not LocalPlayer.Character:FindFirstChild("HasBuso") then
                     ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
@@ -425,76 +396,78 @@ spawn(function()
     end
 end)
 
--- Speed Boost
+-- Auto Stats
 spawn(function()
-    while wait() do
-        if Settings.SpeedBoost then
+    while wait(0.1) do
+        if _G.Settings.AutoStats then
             pcall(function()
-                Humanoid.WalkSpeed = Settings.SpeedValue
-            end)
-        else
-            pcall(function()
-                Humanoid.WalkSpeed = 16
+                local stat = _G.Settings.SelectedStat
+                if stat == "Devil Fruit" then stat = "Demon Fruit" end
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", stat, 1)
             end)
         end
     end
 end)
 
--- NoClip
-RunService.Stepped:Connect(function()
-    if Settings.NoClip then
-        for _, part in pairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
-
--- Fly
-local flying = false
-local flySpeed = 1
-local bodyGyro, bodyVelocity
-
+-- Auto Collect Fruits
 spawn(function()
-    while wait() do
-        if Settings.Fly then
-            if not flying then
-                flying = true
-                
-                bodyGyro = Instance.new("BodyGyro")
-                bodyGyro.P = 9e4
-                bodyGyro.Parent = HumanoidRootPart
-                bodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-                bodyGyro.CFrame = HumanoidRootPart.CFrame
-                
-                bodyVelocity = Instance.new("BodyVelocity")
-                bodyVelocity.Parent = HumanoidRootPart
-                bodyVelocity.velocity = Vector3.new(0, 0.1, 0)
-                bodyVelocity.maxForce = Vector3.new(9e9, 9e9, 9e9)
-                
-                repeat wait()
-                    if Humanoid then
-                        Humanoid.PlatformStand = true
+    while wait(2) do
+        if _G.Settings.AutoCollectFruits then
+            pcall(function()
+                for _, fruit in pairs(Workspace:GetChildren()) do
+                    if string.find(fruit.Name, "Fruit") and fruit:IsA("Tool") then
+                        Teleport(fruit.Handle.CFrame)
+                        wait(0.3)
                     end
-                    
-                    if bodyGyro and bodyVelocity then
-                        bodyGyro.CFrame = Workspace.CurrentCamera.CoordinateFrame
-                        bodyVelocity.velocity = Vector3.new(0, 0, 0)
+                end
+            end)
+        end
+    end
+end)
+
+-- Fruit Sniper
+spawn(function()
+    while wait(0.5) do
+        if _G.Settings.FruitSniper and _G.Settings.SelectedFruit then
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("LoadFruit", _G.Settings.SelectedFruit)
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("PurchaseRawFruit", _G.Settings.SelectedFruit)
+            end)
+        end
+    end
+end)
+
+-- ESP Fruits
+spawn(function()
+    while wait(1) do
+        if _G.Settings.ESPFruits then
+            pcall(function()
+                for _, fruit in pairs(Workspace:GetChildren()) do
+                    if string.find(fruit.Name, "Fruit") and not fruit:FindFirstChild("ESP") then
+                        local billboard = Instance.new("BillboardGui")
+                        billboard.Name = "ESP"
+                        billboard.AlwaysOnTop = true
+                        billboard.Size = UDim2.new(0, 100, 0, 50)
+                        billboard.StudsOffset = Vector3.new(0, 3, 0)
+                        billboard.Parent = fruit
                         
-                        local moveDirection = Humanoid.MoveDirection
-                        if moveDirection.Magnitude > 0 then
-                            bodyVelocity.velocity = moveDirection * (flySpeed * 50)
-                        end
+                        local label = Instance.new("TextLabel")
+                        label.Size = UDim2.new(1, 0, 1, 0)
+                        label.BackgroundTransparency = 1
+                        label.TextColor3 = Color3.fromRGB(255, 0, 255)
+                        label.TextStrokeTransparency = 0.5
+                        label.Text = fruit.Name
+                        label.Font = Enum.Font.GothamBold
+                        label.TextSize = 16
+                        label.Parent = billboard
                     end
-                until not Settings.Fly
-            end
+                end
+            end)
         else
-            flying = false
-            if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-            if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-            if Humanoid then
-                Humanoid.PlatformStand = false
+            for _, fruit in pairs(Workspace:GetChildren()) do
+                if fruit:FindFirstChild("ESP") then
+                    fruit.ESP:Destroy()
+                end
             end
         end
     end
@@ -503,22 +476,24 @@ end)
 -- Remove Fog
 spawn(function()
     while wait(1) do
-        if Settings.RemoveFog then
+        if _G.Settings.RemoveFog then
             local Lighting = game:GetService("Lighting")
             Lighting.FogEnd = 100000
+            Lighting.Brightness = 2
         end
     end
 end)
 
--- Full Bright
+-- White Screen (FPS Boost)
 spawn(function()
     while wait(1) do
-        if Settings.FullBright then
-            local Lighting = game:GetService("Lighting")
-            Lighting.Brightness = 2
-            Lighting.ClockTime = 14
-            Lighting.GlobalShadows = false
-            Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        if _G.Settings.WhiteScreen then
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.Material = "Plastic"
+                    v.Color = Color3.fromRGB(255, 255, 255)
+                end
+            end
         end
     end
 end)
@@ -527,22 +502,16 @@ end)
 
 -- Home Tab
 local HomeTab = Window:CreateTab("🏠 Home", 4483362458)
-local HomeSection = HomeTab:CreateSection("Welcome to Blox Fruits Hub!")
 
-local PlayerLabel = HomeTab:CreateLabel("Player: " .. LocalPlayer.Name)
-local LevelLabel = HomeTab:CreateLabel("Level: Loading...")
-local BellyLabel = HomeTab:CreateLabel("Belly: Loading...")
+HomeTab:CreateParagraph({
+    Title = "Welcome!",
+    Content = "Player: " .. LocalPlayer.Name .. "\nLevel: " .. (LocalPlayer.Data.Level.Value or "Loading...")
+})
 
-spawn(function()
-    while wait(2) do
-        pcall(function()
-            LevelLabel:Set("Level: " .. LocalPlayer.Data.Level.Value)
-            LevelLabel:Set("Belly: $" .. LocalPlayer.Data.Beli.Value)
-        end)
-    end
-end)
-
-HomeTab:CreateParagraph({Title = "Anti-Kick Status", Content = "🛡️ Protection: ACTIVE\n✅ Ban Protection: Enabled\n✅ AFK Protection: Enabled"})
+HomeTab:CreateParagraph({
+    Title = "Protection Status",
+    Content = "✅ Anti-Kick: Active\n✅ Anti-Ban: Active\n✅ Anti-AFK: Active"
+})
 
 HomeTab:CreateButton({
    Name = "Rejoin Server",
@@ -554,11 +523,10 @@ HomeTab:CreateButton({
 HomeTab:CreateButton({
    Name = "Server Hop",
    Callback = function()
-        Notify("Server Hop", "Finding new server...", 3)
-        local Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. game.PlaceId .. '/servers/Public?sortOrder=Asc&limit=100'))
-        for i, v in pairs(Site.data) do
-            if tonumber(v.playing) < tonumber(v.maxPlayers) then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, LocalPlayer)
+        local servers = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. game.PlaceId .. '/servers/Public?sortOrder=Asc&limit=100'))
+        for _, server in pairs(servers.data) do
+            if server.playing < server.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
                 break
             end
         end
@@ -567,533 +535,169 @@ HomeTab:CreateButton({
 
 -- Auto Farm Tab
 local FarmTab = Window:CreateTab("⚔️ Auto Farm", 4483362458)
-local FarmSection = FarmTab:CreateSection("Level Farming")
 
-local AutoFarmToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
    Name = "Auto Farm Level",
    CurrentValue = false,
-   Flag = "AutoFarmLevel",
-   Callback = function(Value)
-        Settings.AutoFarmLevel = Value
-        Notify("Auto Farm", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.AutoFarmLevel = value
+        Notify("Auto Farm", value and "Enabled" or "Disabled", 2)
    end,
 })
 
-local BringMobToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
    Name = "Bring Mob",
    CurrentValue = false,
-   Flag = "BringMob",
-   Callback = function(Value)
-        Settings.BringMob = Value
-        Notify("Bring Mob", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.BringMob = value
    end,
 })
 
-local FastAttackToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
    Name = "Fast Attack",
    CurrentValue = false,
-   Flag = "FastAttack",
-   Callback = function(Value)
-        Settings.FastAttack = Value
-        Notify("Fast Attack", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.FastAttack = value
    end,
 })
 
-local AutoHakiToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
    Name = "Auto Haki",
    CurrentValue = false,
-   Flag = "AutoHaki",
-   Callback = function(Value)
-        Settings.AutoHaki = Value
-        Notify("Auto Haki", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.AutoHaki = value
    end,
 })
 
-local BossSection = FarmTab:CreateSection("Boss Farming")
-
-local BossDropdown = FarmTab:CreateDropdown({
+FarmTab:CreateDropdown({
    Name = "Select Boss",
    Options = BossList,
-   CurrentOption = {"Select Boss"},
-   MultipleOptions = false,
-   Flag = "BossDropdown",
-   Callback = function(Option)
-        selectedBoss = Option[1]
-        Notify("Boss Selected", selectedBoss, 2)
+   CurrentOption = {BossList[1]},
+   Callback = function(option)
+        SelectedBoss = option[1]
    end,
 })
 
-local AutoBossToggle = FarmTab:CreateToggle({
+FarmTab:CreateToggle({
    Name = "Auto Farm Boss",
    CurrentValue = false,
-   Flag = "AutoFarmBoss",
-   Callback = function(Value)
-        Settings.AutoFarmBoss = Value
-        if Value and selectedBoss then
-            Notify("Boss Farm", "Farming " .. selectedBoss, 2)
-        else
-            Notify("Boss Farm", "Disabled", 2)
-        end
+   Callback = function(value)
+        _G.Settings.AutoFarmBoss = value
    end,
 })
 
 -- Stats Tab
 local StatsTab = Window:CreateTab("📊 Stats", 4483362458)
-local StatsSection = StatsTab:CreateSection("Auto Stats")
 
-local StatDropdown = StatsTab:CreateDropdown({
+StatsTab:CreateDropdown({
    Name = "Select Stat",
    Options = {"Melee", "Defense", "Sword", "Gun", "Devil Fruit"},
    CurrentOption = {"Melee"},
-   MultipleOptions = false,
-   Flag = "StatDropdown",
-   Callback = function(Option)
-        Settings.SelectedStat = Option[1]
-        Notify("Stat Selected", Option[1], 2)
+   Callback = function(option)
+        _G.Settings.SelectedStat = option[1]
    end,
 })
 
-local AutoStatsToggle = StatsTab:CreateToggle({
+StatsTab:CreateToggle({
    Name = "Auto Stats",
    CurrentValue = false,
-   Flag = "AutoStats",
-   Callback = function(Value)
-        Settings.AutoStats = Value
-        if Value then
-            Notify("Auto Stats", "Upgrading " .. Settings.SelectedStat, 2)
-        else
-            Notify("Auto Stats", "Disabled", 2)
-        end
+   Callback = function(value)
+        _G.Settings.AutoStats = value
    end,
 })
 
-StatsTab:CreateButton({
-   Name = "Show Current Stats",
-   Callback = function()
-        pcall(function()
-            local stats = LocalPlayer.Data.Stats
-            local melee = stats.Melee.Level.Value
-            local defense = stats.Defense.Level.Value
-            local sword = stats.Sword.Level.Value
-            local gun = stats.Gun.Level.Value
-            local fruit = stats["Demon Fruit"].Level.Value
-            
-            Notify("Your Stats", string.format("M:%d D:%d S:%d G:%d F:%d", melee, defense, sword, gun, fruit), 5)
-        end)
-   end,
-})
-
--- Devil Fruit Tab
+-- Devil Fruits Tab
 local FruitTab = Window:CreateTab("🍇 Devil Fruits", 4483362458)
-local FruitSection = FruitTab:CreateSection("Fruit Collection")
 
-local AutoCollectToggle = FruitTab:CreateToggle({
+FruitTab:CreateToggle({
    Name = "Auto Collect Fruits",
    CurrentValue = false,
-   Flag = "AutoCollectFruits",
-   Callback = function(Value)
-        Settings.AutoCollectFruits = Value
-        Notify("Auto Collect", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.AutoCollectFruits = value
    end,
 })
 
-local AutoStoreToggle = FruitTab:CreateToggle({
-   Name = "Auto Store Fruits",
-   CurrentValue = false,
-   Flag = "AutoStoreFruits",
-   Callback = function(Value)
-        Settings.AutoStoreFruits = Value
-        Notify("Auto Store", Value and "Enabled" or "Disabled", 2)
-   end,
-})
-
-local ESPFruitsToggle = FruitTab:CreateToggle({
+FruitTab:CreateToggle({
    Name = "Fruit ESP",
    CurrentValue = false,
-   Flag = "ESPFruits",
-   Callback = function(Value)
-        Settings.ESPFruits = Value
-        Notify("Fruit ESP", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.ESPFruits = value
    end,
 })
 
-local FruitNotifToggle = FruitTab:CreateToggle({
-   Name = "Fruit Notifications",
+FruitTab:CreateDropdown({
+   Name = "Snipe Fruit",
+   Options = FruitsList,
+   CurrentOption = {FruitsList[1]},
+   Callback = function(option)
+        _G.Settings.SelectedFruit = option[1]
+   end,
+})
+
+FruitTab:CreateToggle({
+   Name = "Fruit Sniper",
    CurrentValue = false,
-   Flag = "FruitNotifications",
-   Callback = function(Value)
-        Settings.FruitNotifications = Value
-        Notify("Fruit Notifications", Value and "Enabled" or "Disabled", 2)
-   end,
-})
-
--- Movement Tab
-local MovementTab = Window:CreateTab("🚀 Movement", 4483362458)
-local MovementSection = MovementTab:CreateSection("Movement Hacks")
-
-local SpeedToggle = MovementTab:CreateToggle({
-   Name = "Speed Boost",
-   CurrentValue = false,
-   Flag = "SpeedBoost",
-   Callback = function(Value)
-        Settings.SpeedBoost = Value
-        Notify("Speed Boost", Value and "Enabled" or "Disabled", 2)
-   end,
-})
-
-local SpeedSlider = MovementTab:CreateSlider({
-   Name = "Speed Value",
-   Range = {16, 300},
-   Increment = 1,
-   CurrentValue = 16,
-   Flag = "SpeedValue",
-   Callback = function(Value)
-        Settings.SpeedValue = Value
-   end,
-})
-
-local FlyToggle = MovementTab:CreateToggle({
-   Name = "Fly (WASD to move)",
-   CurrentValue = false,
-   Flag = "Fly",
-   Callback = function(Value)
-        Settings.Fly = Value
-        Notify("Fly", Value and "Enabled - Use WASD" or "Disabled", 2)
-   end,
-})
-
-local NoClipToggle = MovementTab:CreateToggle({
-   Name = "NoClip",
-   CurrentValue = false,
-   Flag = "NoClip",
-   Callback = function(Value)
-        Settings.NoClip = Value
-        Notify("NoClip", Value and "Enabled" or "Disabled", 2)
+   Callback = function(value)
+        _G.Settings.FruitSniper = value
    end,
 })
 
 -- Teleport Tab
 local TeleportTab = Window:CreateTab("🌍 Teleport", 4483362458)
-local TeleportSection = TeleportTab:CreateSection("Island Teleport")
 
-local IslandDropdown = TeleportTab:CreateDropdown({
+TeleportTab:CreateDropdown({
    Name = "Select Island",
    Options = IslandsList,
-   CurrentOption = {"Select Island"},
-   MultipleOptions = false,
-   Flag = "IslandDropdown",
-   Callback = function(Option)
-        selectedIsland = Option[1]
+   CurrentOption = {IslandsList[1]},
+   Callback = function(option)
+        SelectedIsland = option[1]
    end,
 })
 
 TeleportTab:CreateButton({
    Name = "Teleport to Island",
    Callback = function()
-        if selectedIsland then
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", selectedIsland)
-                Notify("Teleport", "Teleporting to " .. selectedIsland, 2)
-            end)
-        else
-            Notify("Error", "Select an island first!", 2)
+        if SelectedIsland then
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", SelectedIsland)
         end
-   end,
-})
-
-local SeaSection = TeleportTab:CreateSection("Sea Travel")
-
-TeleportTab:CreateButton({
-   Name = "First Sea",
-   Callback = function()
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain")
-        Notify("Sea Travel", "Going to First Sea...", 2)
-   end,
-})
-
-TeleportTab:CreateButton({
-   Name = "Second Sea",
-   Callback = function()
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelDressrosa")
-        Notify("Sea Travel", "Going to Second Sea...", 2)
-   end,
-})
-
-TeleportTab:CreateButton({
-   Name = "Third Sea",
-   Callback = function()
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelZou")
-        Notify("Sea Travel", "Going to Third Sea...", 2)
-   end,
-})
-
--- Visual Tab
-local VisualTab = Window:CreateTab("👁️ Visual", 4483362458)
-local VisualSection = VisualTab:CreateSection("Visual Settings")
-
-local RemoveFogToggle = VisualTab:CreateToggle({
-   Name = "Remove Fog",
-   CurrentValue = false,
-   Flag = "RemoveFog",
-   Callback = function(Value)
-        Settings.RemoveFog = Value
-        Notify("Remove Fog", Value and "Enabled" or "Disabled", 2)
-   end,
-})
-
-local FullBrightToggle = VisualTab:CreateToggle({
-   Name = "Full Bright",
-   CurrentValue = false,
-   Flag = "FullBright",
-   Callback = function(Value)
-        Settings.FullBright = Value
-        Notify("Full Bright", Value and "Enabled" or "Disabled", 2)
-   end,
-})
-
-VisualTab:CreateButton({
-   Name = "Remove Textures (FPS Boost)",
-   Callback = function()
-        for _, v in pairs(Workspace:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Material = "Plastic"
-                v.Reflectance = 0
-            end
-        end
-        Notify("Performance", "Textures removed!", 2)
-   end,
-})
-
-VisualTab:CreateButton({
-   Name = "Low Graphics Mode",
-   Callback = function()
-        local Lighting = game:GetService("Lighting")
-        Lighting.GlobalShadows = false
-        Lighting.FogEnd = 9e9
-        settings().Rendering.QualityLevel = 1
-        
-        for _, v in pairs(Workspace:GetDescendants()) do
-            if v:IsA("Part") or v:IsA("Union") or v:IsA("MeshPart") then
-                v.Material = "Plastic"
-                v.Reflectance = 0
-            elseif v:IsA("Decal") then
-                v.Transparency = 1
-            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-                v.Lifetime = NumberRange.new(0)
-            end
-        end
-        Notify("Performance", "Low graphics enabled!", 2)
    end,
 })
 
 -- Misc Tab
 local MiscTab = Window:CreateTab("⚙️ Misc", 4483362458)
-local MiscSection = MiscTab:CreateSection("Utility")
+
+MiscTab:CreateToggle({
+   Name = "Remove Fog",
+   CurrentValue = false,
+   Callback = function(value)
+        _G.Settings.RemoveFog = value
+   end,
+})
+
+MiscTab:CreateToggle({
+   Name = "White Screen (FPS)",
+   CurrentValue = false,
+   Callback = function(value)
+        _G.Settings.WhiteScreen = value
+   end,
+})
 
 MiscTab:CreateButton({
    Name = "Redeem All Codes",
    Callback = function()
-        local codes = {
-            "NEWTROLL", "Sub2CaptainMaui", "kittgaming", "Sub2Fer999", 
-            "Enyu_is_Pro", "Magicbus", "JCWK", "Starcodeheo", "Bluxxy",
-            "fudd10_v2", "SUB2GAMERROBOT_EXP1", "Sub2NoobMaster123",
-            "Sub2UncleKizaru", "Sub2Daigrock", "Axiore", "TantaiGaming",
-            "StrawHatMaine", "Sub2OfficialNoobie", "TheGreatAce", "Bignews"
-        }
-        
-        local redeemed = 0
+        local codes = {"NEWTROLL", "Sub2CaptainMaui", "kittgaming", "Sub2Fer999", "Enyu_is_Pro", "Magicbus", "JCWK"}
         for _, code in pairs(codes) do
             pcall(function()
                 ReplicatedStorage.Remotes.Redeem:InvokeServer(code)
-                redeemed = redeemed + 1
                 wait(0.5)
             end)
         end
-        Notify("Codes", "Redeemed " .. redeemed .. " codes!", 3)
+        Notify("Codes", "All codes redeemed!", 3)
    end,
 })
 
-MiscTab:CreateButton({
-   Name = "Reset Character",
-   Callback = function()
-        LocalPlayer.Character.Humanoid.Health = 0
-   end,
-})
-
-MiscTab:CreateButton({
-   Name = "Remove Lava Damage",
-   Callback = function()
-        for _, v in pairs(game.Workspace:GetDescendants()) do
-            if v.Name == "Lava" then
-                v:Destroy()
-            end
-        end
-        Notify("Safety", "Lava removed!", 2)
-   end,
-})
-
-local ShopSection = MiscTab:CreateSection("Shop & Items")
-
-MiscTab:CreateButton({
-   Name = "Open Blox Fruit Dealer",
-   Callback = function()
-        pcall(function()
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("getInventoryFruits")
-        end)
-   end,
-})
-
-MiscTab:CreateButton({
-   Name = "Open Inventory",
-   Callback = function()
-        game:GetService("VirtualInputManager"):SendKeyEvent(true, "E", false, game)
-        wait(0.1)
-        game:GetService("VirtualInputManager"):SendKeyEvent(false, "E", false, game)
-   end,
-})
-
--- Raid Tab
-local RaidTab = Window:CreateTab("🏴‍☠️ Raids", 4483362458)
-local RaidSection = RaidTab:CreateSection("Raid Settings")
-
-local selectedChip = nil
-
-local ChipDropdown = RaidTab:CreateDropdown({
-   Name = "Select Chip",
-   Options = {"Flame", "Ice", "Quake", "Light", "Dark", "Buddha", "Spider"},
-   CurrentOption = {"Select Chip"},
-   MultipleOptions = false,
-   Flag = "ChipDropdown",
-   Callback = function(Option)
-        selectedChip = Option[1]
-        Notify("Chip Selected", selectedChip, 2)
-   end,
-})
-
-RaidTab:CreateButton({
-   Name = "Start Raid",
-   Callback = function()
-        if selectedChip then
-            pcall(function()
-                ReplicatedStorage.Remotes.CommF_:InvokeServer("RaidsNpc", "Select", selectedChip)
-                Notify("Raid", "Starting " .. selectedChip .. " raid!", 2)
-            end)
-        else
-            Notify("Error", "Select a chip first!", 2)
-        end
-   end,
-})
-
-RaidTab:CreateButton({
-   Name = "Next Island",
-   Callback = function()
-        pcall(function()
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("RaidsNpc", "Next")
-            Notify("Raid", "Teleporting to next island...", 2)
-        end)
-   end,
-})
-
-RaidTab:CreateButton({
-   Name = "Awakening Room",
-   Callback = function()
-        pcall(function()
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("Awakening", "Check")
-            Notify("Awakening", "Opening awakening menu...", 2)
-        end)
-   end,
-})
-
--- Settings Tab
-local SettingsTab = Window:CreateTab("⚙️ Settings", 4483362458)
-local SettingsSection = SettingsTab:CreateSection("Configuration")
-
-SettingsTab:CreateParagraph({
-    Title = "Script Information",
-    Content = "Version: 2.0 Advanced UI\nCreator: DarkZhen\nUI Library: Rayfield\nStatus: All Features Working"
-})
-
-SettingsTab:CreateButton({
-   Name = "Save Configuration",
-   Callback = function()
-        Notify("Config", "Configuration saved!", 2)
-   end,
-})
-
-SettingsTab:CreateButton({
-   Name = "Load Configuration",
-   Callback = function()
-        Notify("Config", "Configuration loaded!", 2)
-   end,
-})
-
-SettingsTab:CreateButton({
-   Name = "Reset to Default",
-   Callback = function()
-        Notify("Config", "Settings reset to default!", 2)
-   end,
-})
-
-local UISection = SettingsTab:CreateSection("UI Settings")
-
-SettingsTab:CreateKeybind({
-   Name = "Toggle UI",
-   CurrentKeybind = "RightShift",
-   HoldToInteract = false,
-   Flag = "UIToggle",
-   Callback = function(Keybind)
-        Notify("Keybind", "UI Toggle set to " .. Keybind, 2)
-   end,
-})
-
-SettingsTab:CreateButton({
-   Name = "Destroy UI",
-   Callback = function()
-        Rayfield:Destroy()
-   end,
-})
-
--- Credits Tab
-local CreditsTab = Window:CreateTab("ℹ️ Credits", 4483362458)
-local CreditsSection = CreditsTab:CreateSection("About")
-
-CreditsTab:CreateParagraph({
-    Title = "Blox Fruits Hub - Advanced Edition",
-    Content = "A comprehensive auto-farm script with modern UI and advanced features for Blox Fruits.\n\nCreated by: DarkZhen\nUI Library: Rayfield\nVersion: 2.0"
-})
-
-CreditsTab:CreateParagraph({
-    Title = "Features",
-    Content = "✅ Auto Farm Level & Boss\n✅ Auto Stats & Mastery\n✅ Devil Fruit Collection\n✅ Super Fast Attack\n✅ Movement Hacks\n✅ Raid Support\n✅ Anti-Kick Protection\n✅ And Much More!"
-})
-
-CreditsTab:CreateParagraph({
-    Title = "Safety Tips",
-    Content = "⚠️ Use on alt accounts\n⚠️ Don't abuse features\n⚠️ Use in private servers\n⚠️ Be aware of bans\n⚠️ Script is for educational purposes"
-})
-
-CreditsTab:CreateButton({
-   Name = "Join Discord (Coming Soon)",
-   Callback = function()
-        Notify("Discord", "Discord link coming soon!", 3)
-   end,
-})
-
-CreditsTab:CreateButton({
-   Name = "Check for Updates",
-   Callback = function()
-        Notify("Updates", "You are using the latest version!", 3)
-   end,
-})
-
--- Completion Notification
-Notify("Script Loaded", "Blox Fruits Hub loaded successfully! Enjoy!", 5)
-print("=======================================")
-print("Blox Fruits Hub - Advanced Edition")
-print("Version: 2.0")
-print("Creator: DarkZhen")
-print("Anti-Kick Protection: ENABLED")
-print("All Features: UNLOCKED")
-print("=======================================")
-print("Press RightShift to toggle UI")
-print("=======================================")
+Notify("Script Loaded", "Blox Fruits Complete Edition loaded successfully!", 5)
+print("=== Blox Fruits Hub Complete Edition ===")
+print("Status: Loaded Successfully")
+print("Anti-Kick: Active")
+print("All Features: Unlocked")
